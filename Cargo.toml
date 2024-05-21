@@ -1,0 +1,21 @@
+[package]
+name = "admin-token-cli"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+clap = { version = "3", features = ["cargo"] }
+futures-util = "0.3.19"
+solana-clap-v3-utils = "=1.17.3"
+solana-cli-config = "=1.17.3"
+solana-client = "=1.17.3"
+solana-logger = "=1.17.3"
+solana-remote-wallet = "=1.17.3"
+solana-sdk = "=1.17.3"
+solana-frozen-abi= "=1.17.3"
+solana-program= "=1.17.3"
+spl-token = "4.0.0"
+mpl-token-metadata = "4.1.2"
+spl-associated-token-account = "2.0.0"
+tokio = { version = "1", features = ["full"] }
