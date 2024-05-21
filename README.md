@@ -1,6 +1,6 @@
 ### Admin CLI
 
-The admin CLI is a simple rust CLI that can be used to deploy and interact with a Fungible Token.
+The admin CLI is a simple rust CLI that can be used to deploy and interact with a SPL Token.
 
 To run the CLI, first build it:
 
