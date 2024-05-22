@@ -32,6 +32,7 @@ name = "admin-token-cli"
 version = "0.1.0"
 dependencies = [
  "clap 3.2.25",
+ "dialoguer 0.11.0",
  "futures-util",
  "mpl-token-metadata",
  "solana-clap-v3-utils",
@@ -1063,6 +1064,19 @@ dependencies = [
  "console",
  "shell-words",
  "tempfile",
+ "zeroize",
+]
+
+[[package]]
+name = "dialoguer"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "658bce805d770f407bc62102fca7c2c64ceef2fbcb2b8bd19d2765ce093980de"
+dependencies = [
+ "console",
+ "shell-words",
+ "tempfile",
+ "thiserror",
  "zeroize",
 ]
 
@@ -3539,7 +3553,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad77919e1081817f5b38b29ac74d93348aa653b5f987ee53d281fba206b7bd26"
 dependencies = [
  "console",
- "dialoguer",
+ "dialoguer 0.10.4",
  "hidapi",
  "log",
  "num-derive 0.3.3",

@@ -1,7 +1,17 @@
+use std::str::FromStr;
+
+use crate::update_metadata::process_update_metadata;
+
+use solana_sdk::pubkey::Pubkey;
+
 use {
     crate::{mint_to::process_mint_to, transfer_to::process_transfer_to},
     clap::{crate_description, crate_name, crate_version, Arg, Command},
     create_token::process_create_token,
+    dialoguer::{Confirm, Input},
+    mpl_token_metadata::{
+        accounts::Metadata, instructions::UpdateMetadataAccountV2Builder, types::DataV2,
+    },
     solana_clap_v3_utils::{
         input_parsers::{parse_url_or_moniker, pubkey_of},
         input_validators::{is_valid_signer, normalize_to_url_if_moniker},
@@ -18,8 +28,11 @@ use {
 };
 
 pub mod create_token;
+pub mod freeze;
 pub mod mint_to;
 pub mod transfer_to;
+pub mod unfreeze;
+pub mod update_metadata;
 
 struct Config {
     commitment_config: CommitmentConfig,
@@ -166,6 +179,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .help("Amount to transfer"),
                 ),
         )
+        .subcommand(
+            Command::new("freeze")
+                .about("Freeze an account")
+                .arg(
+                    Arg::new("account")
+                        .required(true)
+                        .value_name("ACCOUNT")
+                        .takes_value(true)
+                        .help("Account to freeze"),
+                )
+                .arg(
+                    Arg::new("mint_pubkey")
+                        .required(true)
+                        .value_name("MINT_PUBKEY")
+                        .takes_value(true)
+                        .help("Mint pubkey"),
+                ),
+        )
+        .subcommand(
+            Command::new("unfreeze")
+                .about("Unfreeze an account")
+                .arg(
+                    Arg::new("account")
+                        .required(true)
+                        .value_name("ACCOUNT")
+                        .takes_value(true)
+                        .help("Account to unfreeze"),
+                )
+                .arg(
+                    Arg::new("mint_pubkey")
+                        .required(true)
+                        .value_name("MINT_PUBKEY")
+                        .takes_value(true)
+                        .help("Mint pubkey"),
+                ),
+        )
+        .subcommand(
+            Command::new("updateMetadata")
+                .about("Updates metadata for a token")
+                .arg(
+                    Arg::new("mint_pubkey")
+                        .required(true)
+                        .value_name("MINT_PUBKEY")
+                        .takes_value(true)
+                        .help("Mint pubkey"),
+                ),
+        )
         .get_matches();
 
     let (command, matches) = app_matches.subcommand().unwrap();
@@ -288,6 +348,167 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
 
             println!("Signature: {signature}");
+        }
+        ("freeze", arg_matches) => {
+            let account = pubkey_of(arg_matches, "account").unwrap();
+            let mint_pubkey = pubkey_of(arg_matches, "mint_pubkey").unwrap();
+
+            let signature = freeze::process_freeze_account(
+                &rpc_client,
+                config.default_signer.as_ref(),
+                mint_pubkey,
+                account,
+            )
+            .await
+            .unwrap_or_else(|err| {
+                eprintln!("error: {err}");
+                exit(1);
+            });
+
+            println!("Signature: {signature}");
+        }
+        ("unfreeze", arg_matches) => {
+            let account = pubkey_of(arg_matches, "account").unwrap();
+            let mint_pubkey = pubkey_of(arg_matches, "mint_pubkey").unwrap();
+
+            let signature = unfreeze::process_unfreeze_account(
+                &rpc_client,
+                config.default_signer.as_ref(),
+                mint_pubkey,
+                account,
+            )
+            .await
+            .unwrap_or_else(|err| {
+                eprintln!("error: {err}");
+                exit(1);
+            });
+
+            println!("Signature: {signature}");
+        }
+        ("updateMetadata", arg_matches) => {
+            let mint_pubkey = pubkey_of(arg_matches, "mint_pubkey").unwrap();
+
+            let (metadata_pubkey, _) = Metadata::find_pda(&mint_pubkey);
+
+            let data = rpc_client
+                .get_account_data(&metadata_pubkey)
+                .await
+                .unwrap_or_else(|err| {
+                    eprintln!("error: {err}");
+                    exit(1);
+                });
+
+            let metadata = Metadata::safe_deserialize(data.as_ref()).unwrap();
+
+            println!("Current metadata:");
+            println!("{:#?}", metadata);
+
+            let mut data: DataV2 = DataV2 {
+                name: metadata.name,
+                symbol: metadata.symbol,
+                uri: metadata.uri,
+                seller_fee_basis_points: metadata.seller_fee_basis_points,
+                creators: metadata.creators,
+                collection: metadata.collection,
+                uses: metadata.uses,
+            };
+
+            let mut update_metadata_builder = UpdateMetadataAccountV2Builder::new();
+
+            update_metadata_builder.metadata(metadata_pubkey);
+            update_metadata_builder.update_authority(config.default_signer.pubkey());
+
+            let confirm: bool = Confirm::new()
+                .with_prompt("Do you want to update token metadata?")
+                .interact()
+                .unwrap();
+
+            if confirm {
+                let name: String = Input::new()
+                    .with_prompt("Name (leave blank to skip)")
+                    .allow_empty(true)
+                    .interact_text()
+                    .unwrap();
+                if !name.is_empty() {
+                    data.name = name;
+                }
+                let symbol: String = Input::new()
+                    .with_prompt("Symbol (leave blank to skip)")
+                    .allow_empty(true)
+                    .interact_text()
+                    .unwrap();
+
+                if !symbol.is_empty() {
+                    data.symbol = symbol;
+                }
+
+                let uri: String = Input::new()
+                    .with_prompt("URI (leave blank to skip)")
+                    .allow_empty(true)
+                    .interact_text()
+                    .unwrap();
+
+                if !uri.is_empty() {
+                    data.uri = uri;
+                }
+
+                let seller_fee_basis_points: String = Input::new()
+                    .with_prompt("Seller fee basis points (leave blank to skip)")
+                    .allow_empty(true)
+                    .interact_text()
+                    .unwrap();
+
+                if !seller_fee_basis_points.is_empty() {
+                    data.seller_fee_basis_points = seller_fee_basis_points.parse::<u16>().unwrap();
+                }
+
+                update_metadata_builder.data(data.clone());
+
+                let is_mutable: bool = Confirm::new()
+                    .with_prompt("Is mutable? ")
+                    .interact()
+                    .unwrap();
+
+                update_metadata_builder.is_mutable(is_mutable);
+            }
+
+            let confirm: bool = Confirm::new()
+                .with_prompt("Do you want to update the update authority?")
+                .interact()
+                .unwrap();
+
+            if confirm {
+                let update_authority: String = Input::new()
+                    .with_prompt("Update authority address")
+                    .interact_text()
+                    .unwrap();
+
+                update_metadata_builder
+                    .new_update_authority(Pubkey::from_str(&update_authority).unwrap());
+            }
+
+            println!("New metadata:");
+            println!("{:#?}", data);
+
+            let confirm = Confirm::new()
+                .with_prompt("Proceed with update?")
+                .interact()
+                .unwrap();
+
+            if confirm {
+                let signature = process_update_metadata(
+                    &rpc_client,
+                    config.default_signer.as_ref(),
+                    update_metadata_builder,
+                )
+                .await
+                .unwrap_or_else(|err| {
+                    eprintln!("error: {err}");
+                    exit(1);
+                });
+
+                println!("Signature: {signature}");
+            }
         }
 
         _ => unreachable!(),
