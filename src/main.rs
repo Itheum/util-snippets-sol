@@ -1,8 +1,9 @@
 use std::str::FromStr;
 
-use crate::update_metadata::process_update_metadata;
+use crate::{authorities::process_update_authorities, update_metadata::process_update_metadata};
 
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
+use spl_associated_token_account::get_associated_token_address;
 
 use {
     crate::{mint_to::process_mint_to, transfer_to::process_transfer_to},
@@ -27,6 +28,7 @@ use {
     std::{process::exit, rc::Rc},
 };
 
+pub mod authorities;
 pub mod create_token;
 pub mod freeze;
 pub mod mint_to;
@@ -218,6 +220,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .subcommand(
             Command::new("updateMetadata")
                 .about("Updates metadata for a token")
+                .arg(
+                    Arg::new("mint_pubkey")
+                        .required(true)
+                        .value_name("MINT_PUBKEY")
+                        .takes_value(true)
+                        .help("Mint pubkey"),
+                ),
+        )
+        .subcommand(
+            Command::new("updateAuthorities")
+                .about("Updates authorities for a token (Mint,Freeze,Owner)")
                 .arg(
                     Arg::new("mint_pubkey")
                         .required(true)
@@ -509,6 +522,119 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 println!("Signature: {signature}");
             }
+        }
+        ("updateAuthorities", arg_matches) => {
+            let mint_pubkey = pubkey_of(arg_matches, "mint_pubkey").unwrap();
+
+            let options = vec!["Mint authority", "Freeze authority", "Owner authority"];
+
+            let ix: Instruction;
+            let choice = dialoguer::Select::new()
+                .with_prompt("Choose authority to update")
+                .items(&options)
+                .interact()
+                .unwrap();
+
+            let options = vec!["update", "revoke"];
+
+            match choice {
+                0 => {
+                    let choice = dialoguer::Select::new()
+                        .with_prompt("Choose action")
+                        .items(&options)
+                        .interact()
+                        .unwrap();
+
+                    if choice == 0 {
+                        let new_authority: String = Input::new()
+                            .with_prompt("New authority address")
+                            .interact_text()
+                            .unwrap();
+
+                        ix = spl_token::instruction::set_authority(
+                            &spl_token::ID,
+                            &mint_pubkey,
+                            Some(&Pubkey::from_str(&new_authority).unwrap()),
+                            spl_token::instruction::AuthorityType::MintTokens,
+                            &config.default_signer.pubkey(),
+                            &[&config.default_signer.pubkey()],
+                        )
+                        .unwrap();
+                    } else {
+                        ix = spl_token::instruction::set_authority(
+                            &spl_token::ID,
+                            &mint_pubkey,
+                            None,
+                            spl_token::instruction::AuthorityType::MintTokens,
+                            &config.default_signer.pubkey(),
+                            &[&config.default_signer.pubkey()],
+                        )
+                        .unwrap();
+                    }
+                }
+                1 => {
+                    let choice = dialoguer::Select::new()
+                        .with_prompt("Choose action")
+                        .items(&options)
+                        .interact()
+                        .unwrap();
+
+                    if choice == 0 {
+                        let new_authority: String = Input::new()
+                            .with_prompt("New authority address")
+                            .interact_text()
+                            .unwrap();
+
+                        ix = spl_token::instruction::set_authority(
+                            &spl_token::ID,
+                            &mint_pubkey,
+                            Some(&Pubkey::from_str(&new_authority).unwrap()),
+                            spl_token::instruction::AuthorityType::FreezeAccount,
+                            &config.default_signer.pubkey(),
+                            &[&config.default_signer.pubkey()],
+                        )
+                        .unwrap();
+                    } else {
+                        ix = spl_token::instruction::set_authority(
+                            &spl_token::ID,
+                            &mint_pubkey,
+                            None,
+                            spl_token::instruction::AuthorityType::FreezeAccount,
+                            &config.default_signer.pubkey(),
+                            &[&config.default_signer.pubkey()],
+                        )
+                        .unwrap();
+                    }
+                }
+                2 => {
+                    todo!();
+                    // let new_authority: String = Input::new()
+                    //     .with_prompt("New authority owner address")
+                    //     .interact_text()
+                    //     .unwrap();
+
+                    // ix = spl_token::instruction::set_authority(
+                    //     &spl_token::ID,
+                    //     &mint_pubkey,
+                    //     Some(&Pubkey::from_str(&new_authority).unwrap()),
+                    //     spl_token::instruction::AuthorityType::AccountOwner,
+                    //     &config.default_signer.pubkey(),
+                    //     &[&config.default_signer.pubkey()],
+                    // )
+                    // .unwrap();
+                }
+                _ => unreachable!(),
+            }
+
+            let signature =
+                process_update_authorities(&rpc_client, config.default_signer.as_ref(), ix)
+                    .await
+                    .unwrap_or_else(|err| {
+                        eprintln!("error: {err}");
+                        exit(1);
+                    });
+
+            println!("Signature: {signature}");
         }
 
         _ => unreachable!(),
