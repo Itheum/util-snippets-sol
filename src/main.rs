@@ -128,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .required(true)
                         .value_name("MINT_AUTHORITY")
                         .takes_value(true)
-                        .help("Mint Authority (true/false)"),
+                        .help("Mint Authority (leave blank to generate new keypair)"),
                 ),
         )
         .subcommand(
@@ -298,7 +298,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let uri = arg_matches.get_one::<String>("uri").unwrap();
 
             let mint_keypair =
-                if let Some(mint_keypair) = arg_matches.get_one::<String>("mint_keypair") {
+                if let Some(mint_keypair) = arg_matches.get_one::<String>("mint_authority") {
                     Keypair::read_from_file(mint_keypair).unwrap()
                 } else {
                     Keypair::new()
