@@ -4,7 +4,6 @@ use crate::{authorities::process_update_authorities, update_metadata::process_up
 
 use add_liquidity::process_add_liquidity;
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
-use spl_associated_token_account::get_associated_token_address;
 
 use {
     crate::{mint_to::process_mint_to, transfer_to::process_transfer_to},
