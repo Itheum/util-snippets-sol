@@ -19,4 +19,6 @@ solana-program= "=1.17.3"
 spl-token = "4.0.0"
 mpl-token-metadata = "4.1.2"
 spl-associated-token-account = "2.0.0"
+anchor-client = "=0.29.0"
 tokio = { version = "1", features = ["full"] }
+bridge-program = {git = "https://github.com/Itheum/core-sol-bridge-sc"}

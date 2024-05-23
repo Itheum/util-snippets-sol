@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use crate::{authorities::process_update_authorities, update_metadata::process_update_metadata};
 
+use add_liquidity::process_add_liquidity;
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 use spl_associated_token_account::get_associated_token_address;
 
@@ -28,6 +29,7 @@ use {
     std::{process::exit, rc::Rc},
 };
 
+pub mod add_liquidity;
 pub mod authorities;
 pub mod create_token;
 pub mod freeze;
@@ -35,6 +37,7 @@ pub mod mint_to;
 pub mod transfer_to;
 pub mod unfreeze;
 pub mod update_metadata;
+pub mod utils;
 
 struct Config {
     commitment_config: CommitmentConfig,
@@ -238,6 +241,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .takes_value(true)
                         .help("Mint pubkey"),
                 ),
+        )
+        .subcommand(
+            Command::new("addToLiquidity")
+                .about("Add token supply to bridge contract as liquidity")
+                .arg(
+                    Arg::new("amount")
+                        .required(true)
+                        .value_name("AMOUNT")
+                        .takes_value(true)
+                        .help("Amount to add"),
+                )
+                .arg(
+                    Arg::new("mint_of_token_sent")
+                        .required(true)
+                        .value_name("MINT_OF_TOKEN_SENT")
+                        .help("Mint of token sent"),
+                )
+                .arg(Arg::new("program_id").value_name("PROGRAM_ID").help(
+                    "Bridge Program ID (leave blank to use default declared in program crate)",
+                )),
         )
         .get_matches();
 
@@ -633,6 +656,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         eprintln!("error: {err}");
                         exit(1);
                     });
+
+            println!("Signature: {signature}");
+        }
+        ("addToLiquidity", arg_matches) => {
+            let amount = arg_matches.get_one::<String>("amount").unwrap();
+            let mint_of_token_sent = pubkey_of(arg_matches, "mint_of_token_sent").unwrap();
+            let program_id = if let Some(program_id) = arg_matches.get_one::<String>("program_id") {
+                Pubkey::from_str(&program_id).unwrap()
+            } else {
+                bridge_program::ID
+            };
+
+            let signature = process_add_liquidity(
+                &rpc_client,
+                config.default_signer.as_ref(),
+                program_id,
+                amount.parse::<u64>().unwrap(),
+                mint_of_token_sent,
+            )
+            .await
+            .unwrap_or_else(|err| {
+                eprintln!("error: {err}");
+                exit(1);
+            });
 
             println!("Signature: {signature}");
         }
