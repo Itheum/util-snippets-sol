@@ -127,7 +127,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .arg(
                     Arg::new("mint_authority")
-                        .required(true)
                         .value_name("MINT_AUTHORITY")
                         .takes_value(true)
                         .help("Mint Authority (leave blank to generate new keypair)"),
